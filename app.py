@@ -32,7 +32,7 @@ st.subheader("Preview Dataset Desa")
 st.dataframe(df.head())
 
 # ======================
-# CLEANING (SAMA SEPERTI COLAB)
+# CLEANING
 # ======================
 num_cols = ['IKS_2022','IKE_2022','IKL_2022','NILAI_IDM_2022']
 
@@ -67,7 +67,43 @@ df_clean['STATUS_IDM_CAT'] = pd.Categorical(
 )
 
 # ======================
-# BAR CHART (SESUAI COLAB)
+# KPI DATA QUALITY
+# ======================
+st.subheader("Data Quality Metrics")
+
+col1, col2, col3, col4 = st.columns(4)
+
+# Completeness
+total_cells = df_clean.shape[0] * df_clean.shape[1]
+missing_cells = df_clean.isnull().sum().sum()
+completeness = (1 - (missing_cells / total_cells)) * 100
+
+# Accuracy
+valid_range = df_clean[
+    (df_clean['IKS_2022'].between(0,1)) &
+    (df_clean['IKE_2022'].between(0,1)) &
+    (df_clean['IKL_2022'].between(0,1)) &
+    (df_clean['NILAI_IDM_2022'].between(0,1))
+].shape[0]
+accuracy = (valid_range / len(df_clean)) * 100
+
+# Consistency
+calc_check = (
+    df_clean['Composite_Resilience'] ==
+    (df_clean['IKS_2022'] + df_clean['IKE_2022'] + df_clean['IKL_2022'])
+)
+consistency = (calc_check.sum() / len(df_clean)) * 100
+
+# Timeliness
+timeliness = 100
+
+col1.metric("Accuracy", f"{accuracy:.2f}%")
+col2.metric("Completeness", f"{completeness:.2f}%")
+col3.metric("Consistency", f"{consistency:.2f}%")
+col4.metric("Timeliness", f"{timeliness}%")
+
+# ======================
+# BAR CHART
 # ======================
 st.subheader("Distribusi Desa Berdasarkan Status IDM 2022")
 
@@ -87,7 +123,7 @@ fig_bar = px.bar(
 st.plotly_chart(fig_bar, use_container_width=True)
 
 # ======================
-# HEATMAP (PLOTLY BIAR AMAN)
+# HEATMAP
 # ======================
 st.subheader("Heatmap Korelasi Indeks Desa 2022")
 
@@ -105,7 +141,7 @@ fig_heatmap = px.imshow(
 st.plotly_chart(fig_heatmap, use_container_width=True)
 
 # ======================
-# SCATTER (SESUAI COLAB)
+# SCATTER
 # ======================
 st.subheader("Composite Resilience vs Nilai IDM")
 
@@ -120,3 +156,26 @@ fig_scatter = px.scatter(
 )
 
 st.plotly_chart(fig_scatter, use_container_width=True)
+
+# ======================
+# REKOMENDASI
+# ======================
+st.subheader("Rekomendasi Strategis")
+
+avg_idm = df_clean['NILAI_IDM_2022'].mean()
+kategori_terbanyak = df_clean['STATUS_IDM_CAT'].value_counts().idxmax()
+
+if avg_idm < 0.6:
+    rekom = "Fokus pada peningkatan infrastruktur dan ekonomi desa tertinggal."
+elif avg_idm < 0.75:
+    rekom = "Perkuat program pemberdayaan desa berkembang menuju desa maju."
+else:
+    rekom = "Optimalkan inovasi dan digitalisasi untuk mempertahankan desa mandiri."
+
+st.info(f"""
+📌 Rata-rata Nilai IDM: **{avg_idm:.3f}**  
+📊 Kategori Dominan: **{kategori_terbanyak}**
+
+💡 **Rekomendasi:**
+{rekom}
+""")

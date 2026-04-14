@@ -10,11 +10,13 @@ import matplotlib.pyplot as plt
 st.set_page_config(page_title="Smart Village Dashboard", layout="wide")
 
 # ======================
-# LOAD DATA (SAFE)
+# LOAD DATA
 # ======================
 @st.cache_data
 def load_data():
-    return pd.read_excel("status-idm-2022.xlsx", sheet_name="DESA")
+    file_path = "status-idm-2022.xlsx"
+    df = pd.read_excel(file_path, sheet_name="DESA")
+    return df
 
 df = load_data()
 
@@ -30,59 +32,91 @@ st.subheader("Preview Dataset Desa")
 st.dataframe(df.head())
 
 # ======================
-# VALIDASI KOLOM
+# CLEANING (SAMA SEPERTI COLAB)
 # ======================
-required_cols = ['STATUS_IDM_CAT','IKS_2022','IKE_2022','IKL_2022','NILAI_IDM_2022']
+num_cols = ['IKS_2022','IKE_2022','IKL_2022','NILAI_IDM_2022']
 
-missing_cols = [col for col in required_cols if col not in df.columns]
+def remove_outliers_iqr(df, columns):
+    df_clean = df.copy()
+    for col in columns:
+        Q1 = df_clean[col].quantile(0.25)
+        Q3 = df_clean[col].quantile(0.75)
+        IQR = Q3 - Q1
+        lower = Q1 - 1.5 * IQR
+        upper = Q3 + 1.5 * IQR
+        df_clean = df_clean[(df_clean[col] >= lower) & (df_clean[col] <= upper)]
+    return df_clean
 
-if missing_cols:
-    st.error(f"Kolom tidak ditemukan: {missing_cols}")
-    st.stop()
+df_clean = df.drop_duplicates()
+df_clean = remove_outliers_iqr(df_clean, num_cols)
 
 # ======================
-# BAR CHART
+# FEATURE ENGINEERING
 # ======================
-st.subheader("Distribusi Desa per Kategori STATUS_IDM_CAT")
-
-bar_data = df['STATUS_IDM_CAT'].value_counts().reset_index()
-bar_data.columns = ['Kategori Desa', 'Jumlah Desa']
-
-bar_fig = px.bar(
-    bar_data,
-    x='Kategori Desa',
-    y='Jumlah Desa',
-    title="Jumlah Desa per Kategori"
+df_clean['Composite_Resilience'] = (
+    df_clean['IKS_2022'] +
+    df_clean['IKE_2022'] +
+    df_clean['IKL_2022']
 )
 
-st.plotly_chart(bar_fig, use_container_width=True)
+status_order = ['SANGAT TERTINGGAL','TERTINGGAL','BERKEMBANG','MAJU','MANDIRI']
+df_clean['STATUS_IDM_CAT'] = pd.Categorical(
+    df_clean['STATUS_IDM_2022'],
+    categories=status_order,
+    ordered=True
+)
 
 # ======================
-# HEATMAP
+# BAR CHART (SESUAI COLAB)
 # ======================
-st.subheader("Heatmap Korelasi Indeks Desa")
+st.subheader("Distribusi Desa Berdasarkan Status IDM 2022")
 
-num_cols = ['IKS_2022','IKE_2022','IKL_2022','NILAI_IDM_2022']
-corr = df[num_cols].corr()
+category_counts = df_clean['STATUS_IDM_CAT'].value_counts().sort_index()
+df_bar = category_counts.reset_index()
+df_bar.columns = ['STATUS_IDM_CAT','Jumlah_Desa']
 
-fig, ax = plt.subplots()
-sns.heatmap(corr, annot=True, cmap='coolwarm', ax=ax)
+fig_bar = px.bar(
+    df_bar,
+    x='STATUS_IDM_CAT',
+    y='Jumlah_Desa',
+    color='STATUS_IDM_CAT',
+    title='Distribusi Desa Berdasarkan Status IDM 2022',
+    color_discrete_sequence=px.colors.qualitative.Vivid
+)
 
-st.pyplot(fig)
+st.plotly_chart(fig_bar, use_container_width=True)
 
 # ======================
-# SCATTER PLOT
+# HEATMAP (PLOTLY BIAR AMAN)
 # ======================
-st.subheader("Scatter Plot Composite Resilience vs Nilai IDM")
+st.subheader("Heatmap Korelasi Indeks Desa 2022")
 
-if 'Composite_Resilience' in df.columns:
-    scatter_fig = px.scatter(
-        df,
-        x='NILAI_IDM_2022',
-        y='Composite_Resilience',
-        color='STATUS_IDM_CAT',
-        title='Composite Resilience vs Nilai IDM'
-    )
-    st.plotly_chart(scatter_fig, use_container_width=True)
-else:
-    st.warning("Kolom 'Composite_Resilience' belum tersedia di dataset")
+corr_matrix = df_clean[
+    ['IKS_2022','IKE_2022','IKL_2022','NILAI_IDM_2022','Composite_Resilience']
+].corr()
+
+fig_heatmap = px.imshow(
+    corr_matrix,
+    text_auto='.2f',
+    color_continuous_scale='RdBu_r',
+    title='Heatmap Korelasi Indeks Desa 2022'
+)
+
+st.plotly_chart(fig_heatmap, use_container_width=True)
+
+# ======================
+# SCATTER (SESUAI COLAB)
+# ======================
+st.subheader("Composite Resilience vs Nilai IDM")
+
+fig_scatter = px.scatter(
+    df_clean,
+    x='Composite_Resilience',
+    y='NILAI_IDM_2022',
+    color='STATUS_IDM_CAT',
+    hover_data=['PROVINSI','KABUPATEN','KECAMATAN','DESA'],
+    title='Composite Resilience vs Nilai IDM 2022',
+    color_discrete_sequence=px.colors.qualitative.Vivid
+)
+
+st.plotly_chart(fig_scatter, use_container_width=True)
